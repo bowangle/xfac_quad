@@ -1,0 +1,9 @@
+[submodule "extern/QTgrid-quad"]
+	path = extern/QTgrid-quad
+	url = https://github.com/bowangle/QTgrid-quad.git
+	ignore = dirty
+[submodule "extern/Catch2"]
+	path = extern/Catch2
+	url = https://github.com/catchorg/Catch2.git
+	branch = v2.x
+	ignore = dirty
