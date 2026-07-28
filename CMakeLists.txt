@@ -28,8 +28,12 @@ add_executable(test_main            test/test_main.cpp)
 add_executable(Test_matrix_tci       test/test_matrix_tci.cpp)
 add_executable(Test_SVDDecomp       test/test_SVDDecomp.cpp)
 add_executable(Test_tensor_tci       test/test_tensor_tci.cpp)
+add_executable(Test_benchmark_double   test/test_benchmark_problem_double.cpp)
+add_executable(Test_benchmark_float128 test/test_benchmark_problem_float128.cpp)
+add_executable(Test_benchmark_dd128    test/test_benchmark_problem_dd128.cpp)
 
-foreach(_tgt test_main Test_matrix_tci Test_SVDDecomp Test_tensor_tci)
+foreach(_tgt test_main Test_matrix_tci Test_SVDDecomp Test_tensor_tci
+             Test_benchmark_double Test_benchmark_float128 Test_benchmark_dd128)
     target_link_libraries(${_tgt} PRIVATE tci_deps)
     target_compile_options(${_tgt} PRIVATE -Wall -Wextra -Wreorder -Wshadow)
 endforeach()
