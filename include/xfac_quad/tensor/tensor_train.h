@@ -271,7 +271,7 @@ public:
     TT_sum(TensorTrain<T> const& tt, vector<Real> const& weight)
         : TT_sum(tt, vector<vector<Real>>(tt.M.size(), weight)) {}
 
-    T value() const { return L[1].dot(R[0]); }
+    T value() const { return (L[1] * R[0]).value(); }
 
     /// update the left or right product given the new cube M at site s.
     void updateSite(int s, Tensor3D<T> const& M, bool updateLeft)

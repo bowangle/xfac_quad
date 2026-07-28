@@ -119,7 +119,7 @@ public:
     ///@{compute the cross formula at given rows/columns
     T eval(int i,int j) const {
         if (C.size()==0) return T(0);
-        return leftMat().row(i).dot(rightMat().col(j));
+        return (leftMat().row(i) * rightMat().col(j)).value();
     }
 
     vector<T> eval(vector<pair<int,int>> const& ids) const
