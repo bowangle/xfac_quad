@@ -121,7 +121,7 @@ TEST_CASE("Test MatrixCI1 complex - float128", "[matrix_ci1]")
             return CT(T(1)+x+cos(arg), x*x+T(0.5)*sin(arg));
         };
         auto xi = grid::linspace<T>(T(0), T(1), 100u);
-        int rank = 15;
+        int rank = 30;
 
         MatCT A(static_cast<Eigen::Index>(xi.size()), static_cast<Eigen::Index>(xi.size()));
         for (size_t i = 0; i < xi.size(); i++)
@@ -149,7 +149,7 @@ TEST_CASE("Test MatrixCI1 complex - float128", "[matrix_ci1]")
             return CT(T(1)+x+cos(arg), x*x+T(0.5)*sin(arg));
         };
         auto xi = grid::linspace<T>(T(0), T(1), 100u);
-        int rank = 15;
+        int rank = 30;
 
         auto myTf = [&](vector<T> xs) -> CT { return myf(xs[0], xs[1]); };
         auto ci = CTensorCI1<CT,T>(myTf, vector(2, xi), {.nIter=rank, .reltol=ci_reltol, .pivot1={}, .fullPiv=false, .nRookIter=5, .weight={}, .cond={}, .useCachedFunction=true});
@@ -187,7 +187,7 @@ TEST_CASE("Test MatrixCI2 - float128", "[matrix_ci2]")
             return CT(T(1)+x+cos(arg), x*x+T(0.5)*sin(arg));
         };
         auto xi = grid::linspace<T>(T(0), T(1), 100u);
-        int rank = 15;
+        int rank = 30;
 
         MatCT A(static_cast<Eigen::Index>(xi.size()), static_cast<Eigen::Index>(xi.size()));
         for (size_t i = 0; i < xi.size(); i++)
@@ -212,7 +212,7 @@ TEST_CASE("Test MatrixCI2 - float128", "[matrix_ci2]")
             return CT(T(1)+x+cos(arg), x*x+T(0.5)*sin(arg));
         };
         auto xi = grid::linspace<T>(T(0), T(1), 100u);
-        int rank = 15;
+        int rank = 30;
 
         auto myTf = [&](vector<T> xs) -> CT { return myf(xs[0], xs[1]); };
         auto ci = CTensorCI2<CT,T>(myTf, vector(2, xi), {.bondDim=2*rank, .reltol=ci_reltol, .pivot1={}, .fullPiv=false, .nRookIter=3, .weight={}, .cond={}, .useCachedFunction=true});
