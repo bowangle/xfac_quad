@@ -25,9 +25,9 @@ target_link_libraries(tci_deps INTERFACE qtgrid_deps OpenMP::OpenMP_CXX Boost::b
 
 # ---- test targets -------------------------------------------------------------
 add_executable(test_main            test/test_main.cpp)
-add_executable(Test_matrix_ci       test/test_matrix_ci.cpp)
+add_executable(Test_matrix_ci       test/test_matrix_tci.cpp)
 add_executable(Test_SVDDecomp       test/test_SVDDecomp.cpp)
-add_executable(Test_tensor_ci       test/test_tensor_ci.cpp)
+add_executable(Test_tensor_ci       test/test_tensor_tci.cpp)
 
 foreach(_tgt test_main Test_matrix_ci Test_SVDDecomp Test_tensor_ci)
     target_link_libraries(${_tgt} PRIVATE tci_deps)
