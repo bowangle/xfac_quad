@@ -1,4 +1,5 @@
 #pragma once
+#include "type_double_double.h"
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <iomanip>
 #include <limits>
 #include <complex>
+#include <type_traits>
 
 namespace xfac_quad {
 
@@ -155,6 +157,45 @@ std::vector<Tensor3D<T>> load_vector_tensor(std::istream& in) {
                 }
         Xs.push_back(std::move(X));
     }
+
+    if constexpr (std::is_same_v<RealT, dd_128>) {
+        // New dd_128 files append an exact trailer after the unchanged legacy
+        // decimal representation. Old files simply reach EOF here. Loaders
+        // instantiated for another RealT return before examining the trailer.
+        std::string marker;
+        if (in >> marker && marker == "XFQD_DD128_EXACT_V1") {
+            std::size_t exact_core_count;
+            if (!(in >> exact_core_count) || exact_core_count != Xs.size()) {
+                throw std::runtime_error("Invalid dd_128 exact TT core count");
+            }
+
+            for (std::size_t t = 0; t < Xs.size(); ++t) {
+                Eigen::Index r, c, s;
+                if (!(in >> r >> c >> s)) {
+                    throw std::runtime_error("Invalid dd_128 exact TT dimensions");
+                }
+
+                Tensor3D<T>& X = Xs[t];
+                if (r != X.n_rows || c != X.n_cols || s != X.n_slices) {
+                    throw std::runtime_error("dd_128 exact TT dimensions do not match legacy data");
+                }
+
+                for (Eigen::Index k = 0; k < X.n_slices; ++k)
+                    for (Eigen::Index i = 0; i < X.n_rows; ++i)
+                        for (Eigen::Index j = 0; j < X.n_cols; ++j) {
+                            double re_hi, re_lo, im_hi, im_lo;
+                            if (!(in >> re_hi >> re_lo >> im_hi >> im_lo)) {
+                                throw std::runtime_error("Invalid dd_128 exact TT value");
+                            }
+
+                            RealT re(dd_real(re_hi, re_lo));
+                            RealT im(dd_real(im_hi, im_lo));
+                            X(i, j, k) = T(re, im);
+                        }
+            }
+        }
+    }
+
     return Xs;
 }
 
@@ -185,6 +226,31 @@ void save_Tensor3D_to_arma(std::ostream& out, const std::vector<Tensor3D<T>>& Xs
             }
         }
         out << "\n";
+    }
+
+    if constexpr (std::is_same_v<RealT, dd_128>) {
+        // Dual representation: preserve the legacy decimal TT above, then add
+        // the exact two-double representation for new dd_128-aware loaders.
+        out << "XFQD_DD128_EXACT_V1\n";
+        out << Xs.size() << "\n";
+        out << std::scientific
+            << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+        for (const Tensor3D<T>& X : Xs) {
+            out << X.n_rows << " " << X.n_cols << " " << X.n_slices << "\n";
+            for (Eigen::Index k = 0; k < X.n_slices; ++k) {
+                for (Eigen::Index i = 0; i < X.n_rows; ++i) {
+                    for (Eigen::Index j = 0; j < X.n_cols; ++j) {
+                        const auto& z = X(i, j, k);
+                        const RealT re = z.real();
+                        const RealT im = z.imag();
+                        out << re.x[0] << " " << re.x[1] << " "
+                            << im.x[0] << " " << im.x[1] << " ";
+                    }
+                    out << "\n";
+                }
+            }
+        }
     }
 }
 

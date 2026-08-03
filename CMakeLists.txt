@@ -63,6 +63,7 @@ if(XFAC_QUAD_BUILD_TESTS)
     # One entry per test/test_<name>.cpp -> target xfac_quad_test_<name>
     set(_xfac_quad_tests
         main
+        cubemat_io
         SVDDecomp_double
         SVDDecomp_float128
         SVDDecomp_dd128
