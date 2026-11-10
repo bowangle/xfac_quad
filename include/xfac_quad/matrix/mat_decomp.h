@@ -8,8 +8,8 @@
 #include <type_traits>
 #include <utility>
 #include "xfac_quad/index_set.h"
-#include "type_float128_boost.h"
-#include "type_double_double.h"
+#include <numeric-type-quad/type_float128_boost.h>
+#include <numeric-type-quad/type_double_double.h>
 
 namespace xfac_quad {
 

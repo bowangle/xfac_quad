@@ -1,6 +1,6 @@
 #pragma once
 // QTgrid-quad provides the core QTGrid<Scalar,Sint> class
-#include <grid.h>
+#include <QTgrid-quad/grid.h>
 
 #include <cmath>
 #include <vector>

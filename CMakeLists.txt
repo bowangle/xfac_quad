@@ -1,89 +1,71 @@
 cmake_minimum_required(VERSION 3.21)
-project(xfac_quad LANGUAGES CXX)
+project(xfac_quad VERSION 0.1.0 LANGUAGES CXX)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-if(PROJECT_IS_TOP_LEVEL)
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-endif()
+find_package(QTgrid-quad CONFIG REQUIRED)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+set(XFAC_QUAD_EXTERN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../extern"
+    CACHE PATH "Shared external sources (Catch2)")
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" OFF)
+option(XFAC_QUAD_BUILD_TESTS "Build xfac_quad tests" ${PROJECT_IS_TOP_LEVEL})
 
-option(XFAC_QUAD_BUILD_TESTS
-       "Build xfac_quad's own tests"
-       ${PROJECT_IS_TOP_LEVEL})
+add_library(xfac_quad
+    src/double.cpp src/complex_double.cpp src/dd128.cpp
+    src/complex_dd128.cpp src/float128.cpp src/complex_float128.cpp)
+add_library(xfac_quad::xfac_quad ALIAS xfac_quad)
+set_target_properties(xfac_quad PROPERTIES
+    POSITION_INDEPENDENT_CODE ON INSTALL_RPATH_USE_LINK_PATH TRUE)
+target_compile_features(xfac_quad PUBLIC cxx_std_20)
+target_include_directories(xfac_quad PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(xfac_quad PUBLIC qtgrid_quad::qtgrid_quad OpenMP::OpenMP_CXX)
 
-# ---- dependencies -------------------------------------------------------------
-find_package(OpenMP REQUIRED)
-find_package(Boost REQUIRED)
-
-# Guard against a sibling project (e.g. tci_quad) having already added its own
-# copy of QTgrid-quad to this build tree: target names are global, so a second
-# add_subdirectory() would be a hard "target already exists" error.
-if(NOT TARGET qtgrid_deps)
-    add_subdirectory(extern/QTgrid-quad)
-endif()
-
-# ---- own paths ----------------------------------------------------------------
-set(XFAC_QUAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(CATCH2_INCLUDE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/extern/Catch2/single_include)
-
-# ---- interface target: production headers + transitive deps -------------------
-add_library(xfac_quad_deps INTERFACE)
-
-target_include_directories(xfac_quad_deps INTERFACE
-    ${XFAC_QUAD_INCLUDE_DIR})
-
-target_compile_features(xfac_quad_deps INTERFACE cxx_std_20)
-
-target_link_libraries(xfac_quad_deps INTERFACE
-    qtgrid_deps
-    OpenMP::OpenMP_CXX)
-
-if(TARGET Boost::headers)
-    target_link_libraries(xfac_quad_deps INTERFACE Boost::headers)
-else()
-    target_link_libraries(xfac_quad_deps INTERFACE Boost::boost)
-endif()
-
-# ---- test-only interface: Catch2 ----------------------------------------------
-# Deliberately NOT part of xfac_quad_deps, so consumers of this layer never get
-# Catch2 on their include path. Link this only from test targets.
-add_library(xfac_quad_testing INTERFACE)
-
-target_include_directories(xfac_quad_testing SYSTEM INTERFACE
-    ${CATCH2_INCLUDE_DIR})
-
-# ---- tests (leaf targets: nothing may ever depend on these) -------------------
 if(XFAC_QUAD_BUILD_TESTS)
-    if(NOT EXISTS ${CATCH2_INCLUDE_DIR}/catch2/catch.hpp)
-        message(FATAL_ERROR
-            "Catch2 not found at ${CATCH2_INCLUDE_DIR}.\n"
-            "Run: git submodule update --init --recursive")
-    endif()
-
     enable_testing()
-
-    # One entry per test/test_<name>.cpp -> target xfac_quad_test_<name>
-    set(_xfac_quad_tests
-        main
-        cubemat_io
-        SVDDecomp_double
-        SVDDecomp_float128
-        SVDDecomp_dd128
-        benchmark_problem_double
-        benchmark_problem_float128
-        benchmark_problem_dd128
-        matrix_ci_double
-        matrix_ci_float128
-        matrix_ci_dd128
-        tensor_ci_double
-        tensor_ci_float128
-        tensor_ci_dd128)
-
-    foreach(_name IN LISTS _xfac_quad_tests)
-        add_executable(xfac_quad_test_${_name} test/test_${_name}.cpp)
-        target_link_libraries(xfac_quad_test_${_name}
-            PRIVATE xfac_quad_deps xfac_quad_testing)
-        target_compile_options(xfac_quad_test_${_name} PRIVATE
-            -Wall -Wextra -Wreorder -Wshadow)
-        add_test(NAME xfac_quad_test_${_name}
-                 COMMAND xfac_quad_test_${_name})
+    find_path(CATCH2_INCLUDE_DIR catch2/catch.hpp
+        PATHS "${XFAC_QUAD_EXTERN_DIR}/Catch2/single_include" NO_DEFAULT_PATH NO_CACHE REQUIRED)
+    # Compile Catch2's implementation only once; it is never a production dependency.
+    add_library(xfac_quad_test_main STATIC test/test_main.cpp)
+    target_compile_features(xfac_quad_test_main PRIVATE cxx_std_20)
+    target_include_directories(xfac_quad_test_main SYSTEM PRIVATE "${CATCH2_INCLUDE_DIR}")
+    file(GLOB test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test/test_*.cpp")
+    list(REMOVE_ITEM test_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/test_main.cpp")
+    foreach(source IN LISTS test_sources)
+        get_filename_component(name "${source}" NAME_WE)
+        set(target "xfac_quad_${name}")
+        add_executable(${target} "${source}")
+        target_include_directories(${target} SYSTEM PRIVATE "${CATCH2_INCLUDE_DIR}")
+        target_link_libraries(${target} PRIVATE xfac_quad xfac_quad_test_main)
+        target_compile_options(${target} PRIVATE
+            "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wreorder;-Wshadow;-UNDEBUG>")
+        if(name MATCHES "^test_benchmark_")
+            add_test(NAME ${target} COMMAND ${target} "[.]")
+            set_tests_properties(${target} PROPERTIES LABELS slow)
+        else()
+            add_test(NAME ${target} COMMAND ${target})
+        endif()
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-output/${name}")
+        set_tests_properties(${target} PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-output/${name}")
     endforeach()
 endif()
+
+install(TARGETS xfac_quad EXPORT xfac_quadTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY include/xfac_quad DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+set(package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/xfac_quad")
+install(EXPORT xfac_quadTargets NAMESPACE xfac_quad:: DESTINATION "${package_dir}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/xfac_quadConfig.cmake" [=[
+include(CMakeFindDependencyMacro)
+find_dependency(QTgrid-quad CONFIG)
+find_dependency(OpenMP COMPONENTS CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/xfac_quadTargets.cmake")
+]=])
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/xfac_quadConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/xfac_quadConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/xfac_quadConfigVersion.cmake" DESTINATION "${package_dir}")

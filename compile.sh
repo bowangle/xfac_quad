@@ -1,19 +1,13 @@
-#!/bin/bash
-# Paths
-PROJECT_ROOT=$(pwd)
-BUILD_DIR="$PROJECT_ROOT/build"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# ccache on by default; pass -ncc to disable (forces a clean rebuild)
-if [[ "$1" == "-ncc" ]]; then
-    export CCACHE_DISABLE=1
-    rm -rf "$BUILD_DIR"
-fi
+PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$PROJECT_ROOT/../.." && pwd)"
+BUILD_DIR="${BUILD_DIR:-$PROJECT_ROOT/build}"
 
-# Configure CMake (out-of-source build)
+# Lower layers must already be installed. Extra arguments are CMake options.
 cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native"
-
-# Build everything
-cmake --build "$BUILD_DIR" -j 1
-cat build/CMakeCache.txt | grep CMAKE_CXX_COMPILER
+    -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native" \
+    -DCMAKE_PREFIX_PATH="$REPO_ROOT/install" "$@"
+cmake --build "$BUILD_DIR" --parallel "${BUILD_JOBS:-1}"

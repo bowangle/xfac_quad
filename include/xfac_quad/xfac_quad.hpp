@@ -2,8 +2,8 @@
 // Boost math constants needed by type_float128_boost.h's pi<float128>()
 #include <boost/math/constants/constants.hpp>
 // Import quadruple-precision types from numeric-type-quad
-#include "type_double_double.h"
-#include "type_float128_boost.h"
+#include <numeric-type-quad/type_double_double.h>
+#include <numeric-type-quad/type_float128_boost.h>
 
 // -------------------------------------------------------------------
 // Fix boost bug: numeric_limits<float128>::min/max/lowest return
@@ -39,3 +39,19 @@ inline BOOST_MP_CXX14_CONSTEXPR float128 numeric_limits<float128>::lowest() noex
 #include "xfac_quad/tensor/tensor_ci.h"
 #include "xfac_quad/tensor/tensor_ci_2.h"
 #include "xfac_quad/tensor/tensor_ci_converter.h"
+
+// Precompile lightweight containers and function wrappers only. Whole-class
+// SVD/CI instantiation is intentionally avoided because it exhausts compiler
+// memory; those algorithms remain available as on-demand header templates.
+namespace xfac_quad {
+#define XFAC_QUAD_EXTERN(T)                    \
+    extern template struct Tensor3D<T>;         \
+    extern template struct TensorFunction<T>;
+XFAC_QUAD_EXTERN(double)
+XFAC_QUAD_EXTERN(std::complex<double>)
+XFAC_QUAD_EXTERN(dd_128)
+XFAC_QUAD_EXTERN(Cdd_128)
+XFAC_QUAD_EXTERN(float128)
+XFAC_QUAD_EXTERN(Cfloat128)
+#undef XFAC_QUAD_EXTERN
+} // namespace xfac_quad

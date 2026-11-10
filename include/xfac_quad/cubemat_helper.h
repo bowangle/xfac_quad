@@ -1,5 +1,5 @@
 #pragma once
-#include "type_double_double.h"
+#include <numeric-type-quad/type_double_double.h>
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm>

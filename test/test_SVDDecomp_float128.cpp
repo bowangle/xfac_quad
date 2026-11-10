@@ -1,4 +1,3 @@
-#define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 #include <limits>
 #include "xfac_quad/xfac_quad.hpp"
