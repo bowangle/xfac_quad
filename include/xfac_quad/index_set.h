@@ -98,6 +98,14 @@ public:
         for(auto x:from_int_data) if (x!=i) out.push_back(x);
         *this=IndexSet(out);
     }
+
+    void replace(Index from, Index to)
+    {
+        if (to_int_data.find(from) == to_int_data.end()) throw std::invalid_argument("IndexSet::replace non-existing index");
+        from_int_data.at(to_int_data.at(from)) = to;
+        to_int_data.insert({to, to_int_data.at(from)});
+        to_int_data.erase(from);
+    }
 };
 
 template<class Index=int>
