@@ -14,7 +14,7 @@ PREFIX=xfac_quad_test_
 echo "==> Running xfac_quad tests..."
 
 for name in \
-tree tensor_tree tensor_tree_io tensor_tree_sum \
+tree tensor_tree tensor_tree_ci tensor_tree_io tensor_tree_sum \
 cubemat_io \
 SVDDecomp_double SVDDecomp_float128 SVDDecomp_dd128 \
 matrix_ci_double matrix_ci_float128 matrix_ci_dd128 \
