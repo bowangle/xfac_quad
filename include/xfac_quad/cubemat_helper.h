@@ -114,6 +114,130 @@ cube_as_matrix2(Tensor3D<T> const& A) {
         A.data.data(), A.n_rows * A.n_cols, A.n_slices);
 }
 
+/// Unfold with axis cube_pos as columns; pack the other axes in column-major order.
+/// For a tensor A(i,j,k) of shape (I,J,K), the matrix B satisfies:
+/// cube_pos == 0: B(j + J*k, i) = A(i,j,k), shape (J*K, I).
+/// cube_pos == 1: B(i + I*k, j) = A(i,j,k), shape (I*K, J).
+/// cube_pos == 2: B(i + I*j, k) = A(i,j,k), shape (I*J, K).
+/// The result owns its data; no complex conjugation is performed.
+template<class T>
+typename Tensor3D<T>::MatrixX cubeToMat_R(Tensor3D<T> const& A, int cube_pos)
+{
+    if (cube_pos < 0 || cube_pos > 2)
+        throw std::invalid_argument("cube_pos must be 0, 1 or 2");
+    const Eigen::Index dimensions[] = {A.n_rows, A.n_cols, A.n_slices};
+    const Eigen::Index packed_size = cube_pos == 0 ? A.n_cols * A.n_slices
+                                 : cube_pos == 1 ? A.n_rows * A.n_slices
+                                                 : A.n_rows * A.n_cols;
+    typename Tensor3D<T>::MatrixX result(packed_size, dimensions[cube_pos]);
+    for (Eigen::Index k = 0; k < A.n_slices; ++k)
+        for (Eigen::Index j = 0; j < A.n_cols; ++j)
+            for (Eigen::Index i = 0; i < A.n_rows; ++i) {
+                if (cube_pos == 0) result(j + A.n_cols*k, i) = A(i, j, k);
+                else if (cube_pos == 1) result(i + A.n_rows*k, j) = A(i, j, k);
+                else result(i + A.n_rows*j, k) = A(i, j, k);
+            }
+    return result;
+}
+
+/// Unfold with axis cube_pos as rows, without conjugating complex values.
+/// For a tensor A(i,j,k) of shape (I,J,K), the matrix B satisfies:
+/// cube_pos == 0: B(i, j + J*k) = A(i,j,k), shape (I, J*K).
+/// cube_pos == 1: B(j, i + I*k) = A(i,j,k), shape (J, I*K).
+/// cube_pos == 2: B(k, i + I*j) = A(i,j,k), shape (K, I*J).
+/// Currently builds the right unfolding, then copies its transpose into the result.
+template<class T>
+typename Tensor3D<T>::MatrixX cubeToMat_L(Tensor3D<T> const& A, int cube_pos)
+{
+    return cubeToMat_R(A, cube_pos).transpose().eval();
+}
+
+/// Reverse cubeToMat_R; shape = {I,J,K} contains the output tensor dimensions.
+/// Reconstruct tensor B(i,j,k) from matrix A, using column-major packed indices:
+/// cube_pos == 0: B(i,j,k) = A(j + J*k, i), input shape (J*K, I).
+/// cube_pos == 1: B(i,j,k) = A(i + I*k, j), input shape (I*K, J).
+/// cube_pos == 2: B(i,j,k) = A(i + I*j, k), input shape (I*J, K).
+/// The result owns its data; the input matrix is not modified.
+template<class Derived>
+Tensor3D<typename Derived::Scalar> matToCube_R(Eigen::MatrixBase<Derived> const& A,
+                                               std::vector<Eigen::Index> const& shape,
+                                               int cube_pos)
+{
+    if (cube_pos < 0 || cube_pos > 2)
+        throw std::invalid_argument("cube_pos must be 0, 1 or 2");
+    if (shape.size() != 3 || shape[0] < 0 || shape[1] < 0 || shape[2] < 0)
+        throw std::invalid_argument("matToCube_R: expected three nonnegative dimensions");
+    const Eigen::Index packed_size = cube_pos == 0 ? shape[1] * shape[2]
+                                 : cube_pos == 1 ? shape[0] * shape[2]
+                                                 : shape[0] * shape[1];
+    if (A.rows() != packed_size || A.cols() != shape[cube_pos])
+        throw std::invalid_argument("matToCube_R: matrix dimensions do not match shape");
+    Tensor3D<typename Derived::Scalar> result(shape[0], shape[1], shape[2]);
+    for (Eigen::Index k = 0; k < shape[2]; ++k)
+        for (Eigen::Index j = 0; j < shape[1]; ++j)
+            for (Eigen::Index i = 0; i < shape[0]; ++i) {
+                if (cube_pos == 0) result(i, j, k) = A(j + shape[1]*k, i);
+                else if (cube_pos == 1) result(i, j, k) = A(i + shape[0]*k, j);
+                else result(i, j, k) = A(i + shape[0]*j, k);
+            }
+    return result;
+}
+
+/// Reverse cubeToMat_L; shape = {I,J,K} contains the output tensor dimensions.
+/// Reconstruct tensor B(i,j,k) from matrix A, using column-major packed indices:
+/// cube_pos == 0: B(i,j,k) = A(i, j + J*k), input shape (I, J*K).
+/// cube_pos == 1: B(i,j,k) = A(j, i + I*k), input shape (J, I*K).
+/// cube_pos == 2: B(i,j,k) = A(k, i + I*j), input shape (K, I*J).
+/// Uses a lazy, non-conjugating transpose: no intermediate matrix copy is needed.
+template<class Derived>
+Tensor3D<typename Derived::Scalar> matToCube_L(Eigen::MatrixBase<Derived> const& A,
+                                               std::vector<Eigen::Index> const& shape,
+                                               int cube_pos)
+{
+    return matToCube_R(A.transpose(), shape, cube_pos);
+}
+
+/// Select the physical index on the third axis, retaining a singleton third axis.
+template<class T>
+Tensor3D<T> cube_eval(Tensor3D<T> const& M, int slice_index)
+{
+    if (slice_index < 0 || slice_index >= M.n_slices)
+        throw std::out_of_range("cube_eval: slice index out of range");
+    Tensor3D<T> result(M.n_rows, M.n_cols, 1);
+    result.slice(0) = M.slice_const(slice_index);
+    return result;
+}
+
+/// Contract axis cube_pos with a column vector, retaining that axis with size one.
+/// This is a bilinear contraction: complex values are not conjugated.
+template<class T, class Derived>
+Tensor3D<T> cube_vec(Tensor3D<T> const& a, Eigen::MatrixBase<Derived> const& b, int cube_pos)
+{
+    static_assert(std::is_same_v<T, typename Derived::Scalar>,
+                  "cube_vec: tensor and vector must have the same scalar type");
+    if (cube_pos < 0 || cube_pos > 2)
+        throw std::invalid_argument("cube_pos must be 0, 1 or 2");
+    const Eigen::Index dimensions[] = {a.n_rows, a.n_cols, a.n_slices};
+    if (b.cols() != 1 || b.rows() != dimensions[cube_pos])
+        throw std::invalid_argument("cube_vec: vector size does not match contracted axis");
+
+    Tensor3D<T> result(cube_pos == 0 ? 1 : a.n_rows,
+                       cube_pos == 1 ? 1 : a.n_cols,
+                       cube_pos == 2 ? 1 : a.n_slices);
+    if (cube_pos == 0) {
+        for (Eigen::Index k = 0; k < a.n_slices; ++k)
+            result.slice(k) = b.transpose() * a.slice_const(k);
+    } else if (cube_pos == 1) {
+        for (Eigen::Index k = 0; k < a.n_slices; ++k)
+            result.slice(k) = a.slice_const(k) * b;
+    } else {
+        using Col = Eigen::Matrix<T, Eigen::Dynamic, 1>;
+        Eigen::Map<Col> flattened(result.data.data(), a.n_rows * a.n_cols);
+        flattened = cube_as_matrix2(a) * b;
+    }
+    return result;
+}
+
 // ============================================================
 // Save / Load (Armadillo-compatible format)
 // ============================================================

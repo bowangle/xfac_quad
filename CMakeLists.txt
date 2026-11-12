@@ -64,6 +64,9 @@ if(XFAC_QUAD_BUILD_TESTS)
     set(_xfac_quad_tests
         main
         tree
+        tensor_tree
+        tensor_tree_io
+        tensor_tree_sum
         cubemat_io
         SVDDecomp_double
         SVDDecomp_float128
