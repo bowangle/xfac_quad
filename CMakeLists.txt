@@ -66,6 +66,7 @@ if(XFAC_QUAD_BUILD_TESTS)
         tree
         tensor_tree
         tensor_tree_ci
+        tensor_tree_ci_process
         tensor_tree_io
         tensor_tree_sum
         cubemat_io
