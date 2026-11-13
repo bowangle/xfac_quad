@@ -19,6 +19,8 @@
 
 #include <grid.h> // QTgrid_quad.
 #include <xfac_quad/xfac_quad.hpp>
+#include <xfac_quad/tree/tree.hpp>
+#include <xfac_quad/tree/tensor_tree_ci.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -502,6 +504,246 @@ class TCI2_1D_Runner{
 
 };
 
+// =========================================================================
+// TTCI_runner for >= 1D function
+// =========================================================================
+
+template <typename Scalar, typename Sint>
+class TTCI_runner {
+public:
+    using Real = typename Eigen::NumTraits<Scalar>::Real;
+    using Complex = std::complex<Real>;
+
+    const MultQTGrid<Real, Sint> mgrid;
+    const xfac_quad::TopologyTree tree;
+    const ttci_runner_param<Scalar> tci_param;
+    std::function<Scalar(std::vector<Real>)> function_x;
+    std::function<Scalar(std::vector<int>)> function_id;
+    const std::vector<int> l_d;
+    std::atomic<int> counter{0};
+    std::atomic<int> counter_cached{0};
+    std::shared_ptr<spdlog::logger> const logger;
+
+    TTCI_runner(
+        MultQTGrid<Real, Sint> mgrid_,
+        xfac_quad::TopologyTree tree_,
+        ttci_runner_param<Scalar> tci_param_,
+        std::function<Scalar(std::vector<Real>)> function_x_,
+        std::shared_ptr<spdlog::logger> logger_ = nullptr
+    )
+    :
+        mgrid(std::move(mgrid_)),
+        tree(std::move(tree_)),
+        tci_param(std::move(tci_param_)),
+        function_x(std::move(function_x_)),
+        function_id(resolve_function(tci_param.do_cache_runner_lvl)),
+        l_d(std::vector<int>(mgrid.get_tensorLen(), 2)),
+        logger(std::move(logger_))
+    {
+        if (tree.nodes.size() != l_d.size()) {
+            throw std::invalid_argument(
+                "TTCI_runner: tree physical node count must match the grid tensor length");
+        }
+        if (!tci_param.pivot1.empty() && tci_param.pivot1.size() != l_d.size()) {
+            throw std::invalid_argument(
+                "TTCI_runner: pivot1 must be empty or have one entry per grid tensor index");
+        }
+    }
+
+    std::function<Scalar(std::vector<int>)> func_to_grid()
+    {
+        return [this, qt_grid = mgrid, f = function_x](const std::vector<int>& id) -> Scalar {
+            counter.fetch_add(1, std::memory_order_relaxed);
+            return f(qt_grid.id_to_coord(id));
+        };
+    }
+
+    struct MultiIndexHash {
+        size_t operator()(std::vector<int> const& mi) const noexcept {
+            size_t seed = mi.size();
+            for (int x : mi) {
+                seed ^= static_cast<size_t>(x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
+        }
+    };
+
+    static constexpr std::size_t kNShards = 64;
+
+    struct alignas(64) CacheShard {
+        std::shared_mutex mtx;
+        std::unordered_map<std::vector<int>, Scalar, MultiIndexHash> map;
+    };
+
+    std::function<Scalar(std::vector<int>)>
+    make_cached_function(std::function<Scalar(std::vector<int>)> f)
+    {
+        auto shards = std::make_shared<std::array<CacheShard, kNShards>>();
+
+        return [this, f = std::move(f), shards](const std::vector<int>& v) -> Scalar
+        {
+            CacheShard& s = (*shards)[MultiIndexHash{}(v) % kNShards];
+
+            {
+                std::shared_lock<std::shared_mutex> lk(s.mtx);
+                auto it = s.map.find(v);
+                if (it != s.map.end()) {
+                    counter_cached.fetch_add(1, std::memory_order_relaxed);
+                    return it->second;
+                }
+            }
+
+            // Evaluate outside the lock, as in the 1D runner. Concurrent misses
+            // may evaluate the same point; the sampled function must be pure.
+            Scalar result = f(v);
+
+            {
+                std::unique_lock<std::shared_mutex> lk(s.mtx);
+                return s.map.emplace(v, result).first->second;
+            }
+        };
+    }
+
+    std::function<Scalar(std::vector<int>)>
+    resolve_function(bool do_cache)
+    {
+        std::function<Scalar(std::vector<int>)> function_on_grid = func_to_grid();
+        if (do_cache){
+            return make_cached_function(function_on_grid);
+        }
+        else{
+            return function_on_grid;
+        }
+    }
+
+    void fit(
+        const std::vector<std::vector<Real>>& additional_pivot,
+        bool verbose = true,
+        bool do_save = false,
+        const std::string& file_prefix="",
+        int nb_point_res=1000
+    )
+    {
+        if (nb_point_res <= 0)
+            throw std::invalid_argument("TTCI_runner::fit: nb_point_res must be positive");
+
+        auto log = [&](const std::string& msg) {
+            if (logger) {
+                logger->info(msg);
+            }
+            if (verbose) {
+                std::cout << msg << "\n";
+            }
+        };
+        auto vector_to_string = [](const auto& values) {
+            std::ostringstream oss;
+            oss << std::scientific
+                << std::setprecision(std::numeric_limits<Real>::max_digits10);
+            oss << "[";
+            for (size_t i = 0; i < values.size(); ++i) {
+                if (i != 0) oss << ", ";
+                oss << values[i];
+            }
+            oss << "]";
+            return oss.str();
+        };
+
+        std::vector<std::vector<int>> id_additionnal_pivot;
+        id_additionnal_pivot.reserve(additional_pivot.size());
+        for (const auto& point : additional_pivot)
+            id_additionnal_pivot.push_back(mgrid.coord_to_id(point));
+
+        // ===================== printing parameter ======================
+        {
+            log("========== FIT PARAMETERS ==========");
+            log("dimension = " + std::to_string(mgrid.get_dim()));
+            log("a = " + vector_to_string(mgrid.get_a()));
+            log("b = " + vector_to_string(mgrid.get_b()));
+            log("nBits = " + vector_to_string(mgrid.get_nBits()));
+            if (!tci_param.pivot1.empty()) {
+                log("x_init = " + vector_to_string(mgrid.id_to_coord(tci_param.pivot1)));
+                log("x_init id = " + xf_qd_detail::vec_to_string(tci_param.pivot1));
+            } else {
+                log("x_init = (none: pivot1 not given)");
+            }
+            for (size_t i = 0; i < additional_pivot.size(); ++i) {
+                log("additional_pivot[" + std::to_string(i) + "] = "
+                    + vector_to_string(additional_pivot[i]));
+                log("id_additionnal_pivot[" + std::to_string(i) + "] = "
+                    + xf_qd_detail::vec_to_string(id_additionnal_pivot[i]));
+            }
+            log("verbose = " + std::string(verbose ? "true" : "false"));
+            log("do_save = " + std::string(do_save ? "true" : "false"));
+            log("file_prefix = " + file_prefix);
+            log("nb_point_res = " + std::to_string(nb_point_res));
+            {
+                std::ostringstream oss;
+                oss << std::scientific
+                    << std::setprecision(std::numeric_limits<Real>::max_digits10)
+                    << "ttci_runner_param:"
+                    << "\n  nb_iter     = " << tci_param.nb_iter
+                    << "\n  bondDim     = " << tci_param.bondDim
+                    << "\n  reltol      = " << tci_param.reltol
+                    << "\n  pivot1      = " << xf_qd_detail::vec_to_string(tci_param.pivot1)
+                    << "\n  fullPiv     = " << (tci_param.fullPiv ? "true" : "false")
+                    << "\n  nRookIter   = " << tci_param.nRookIter
+                    << "\n  cache       = " << xf_qd_detail::cache_name(tci_param.cache)
+                    << " (xfac_lvl = " << (tci_param.useCachedFunction_xfac_lvl ? "true" : "false")
+                    << ", runner_lvl = " << (tci_param.do_cache_runner_lvl ? "true" : "false") << ")";
+                log(oss.str());
+            }
+        }
+
+        xfac_quad::TensorTreeCIParam<Scalar> param;
+        param.bondDim = tci_param.bondDim;
+        param.reltol = tci_param.reltol;
+        param.pivot1 = tci_param.pivot1;
+        param.fullPiv = tci_param.fullPiv;
+        param.nRookIter = tci_param.nRookIter;
+        param.useCachedFunction = tci_param.useCachedFunction_xfac_lvl;
+
+        // ===================== actual computation ======================
+
+        log("==========begin iteration===============");
+        xfac_quad::TensorTreeCI<Scalar> tci(function_id, tree, l_d, param);
+        tci.addPivotsAllBonds(id_additionnal_pivot);
+        for (int it = 0; it < tci_param.nb_iter; ++it) {
+            tci.iterate(); // One full DFS sweep.
+            std::ostringstream oss;
+            oss << std::scientific
+                << std::setprecision(std::numeric_limits<Real>::max_digits10)
+                << "sweep " << (it + 1)
+                << " |pivot error| = " << tci.pivotError.back();
+            log(oss.str());
+        }
+
+        // As in the 1D runner, always save the approximation. The tree format
+        // includes both topology and cores, and supports real and complex scalars.
+        tci.tt.save(file_prefix + ".tt");
+
+        size_t max_bond_dim = 0;
+        for (const auto& entry : tci.Iset)
+            max_bond_dim = std::max(max_bond_dim, entry.second.size());
+        log("Max bond dim: " + std::to_string(max_bond_dim));
+        log("Nb function call:" + std::to_string(counter.load()));
+        log("Nb function cached call:" + std::to_string(counter_cached.load()));
+
+        TTreeErrorOnGrid<Real> error =
+            error_TTree_on_grid_point(tci.tt, function_id, mgrid, nb_point_res);
+        {
+            std::ostringstream oss;
+            oss << std::scientific
+                << std::setprecision(std::numeric_limits<Real>::max_digits10)
+                << error;
+            log(oss.str());
+        }
+
+        if (do_save) {
+            save_TTreeErrorOnGrid(error, file_prefix + "_error.dat");
+            mgrid.save_json(file_prefix);
+        }
+    }
+};
 
 // =========================================================================
 // Free functions for loading f_value JSON data saved by save_to_json()

@@ -109,7 +109,7 @@ if(XFAC_QUAD_BUILD_TESTS)
     endforeach()
 
     # High-level runner: test/xfac_quad_runner/test_<name>.cpp.
-    set(_xfac_quad_runner_tests runner determinism param)
+    set(_xfac_quad_runner_tests runner ttci_runner ttci_runner_2d determinism param)
     foreach(_name IN LISTS _xfac_quad_runner_tests)
         add_executable(xfac_quad_runner_test_${_name}
             test/xfac_quad_runner/test_${_name}.cpp)

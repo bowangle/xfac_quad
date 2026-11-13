@@ -11,7 +11,7 @@ cd "$BUILD_DIR" || exit 1
 
 echo "==> Running xfac_quad_runner tests..."
 
-for name in param runner determinism
+for name in param runner ttci_runner ttci_runner_2d determinism
 do
     tgt="xfac_quad_runner_test_$name"
     echo "--- $tgt ---"

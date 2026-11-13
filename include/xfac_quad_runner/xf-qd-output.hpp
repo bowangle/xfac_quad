@@ -8,9 +8,12 @@
 #include <fstream>
 #include <string>
 #include <limits>
+#include <random>
+#include <stdexcept>
 
 #include <grid.h>
 #include <xfac_quad/xfac_quad.hpp>
+#include <xfac_quad/tree/tensor_tree.hpp>
 
 namespace xfac_quad_runner {
 
@@ -237,6 +240,182 @@ TTErrorOnGrid<Scalar> error_TT_on_grid_point(
     out.l_point = l_point;
     out.l_ref = l_ref_i;
     out.l_tt = l_res_tt;
+    out.compute_summary();
+    return out;
+}
+
+// Tree/ND counterpart of TTErrorOnGrid. Each point stores all physical coordinates.
+template <typename Scalar>
+struct TTreeErrorOnGrid {
+    using Complex = std::complex<Scalar>;
+
+    std::vector<Scalar> real_abs;
+    std::vector<Scalar> real_rel;
+    std::vector<Scalar> imag_abs;
+    std::vector<Scalar> imag_rel;
+    std::vector<Scalar> abs_abs;
+    std::vector<Scalar> abs_rel;
+
+    std::vector<std::vector<Scalar>> l_point;
+    std::vector<Complex> l_ref;
+    std::vector<Complex> l_tt;
+
+    Scalar real_abs_mean, real_abs_min, real_abs_max;
+    Scalar real_rel_mean, real_rel_min, real_rel_max;
+    Scalar imag_abs_mean, imag_abs_min, imag_abs_max;
+    Scalar imag_rel_mean, imag_rel_min, imag_rel_max;
+    Scalar abs_abs_mean, abs_abs_min, abs_abs_max;
+    Scalar abs_rel_mean, abs_rel_min, abs_rel_max;
+
+    void compute_summary()
+    {
+        compute_stats(real_abs, real_abs_mean, real_abs_min, real_abs_max);
+        compute_stats(real_rel, real_rel_mean, real_rel_min, real_rel_max);
+        compute_stats(imag_abs, imag_abs_mean, imag_abs_min, imag_abs_max);
+        compute_stats(imag_rel, imag_rel_mean, imag_rel_min, imag_rel_max);
+        compute_stats(abs_abs, abs_abs_mean, abs_abs_min, abs_abs_max);
+        compute_stats(abs_rel, abs_rel_mean, abs_rel_min, abs_rel_max);
+    }
+};
+
+template <typename Scalar>
+void save_TTreeErrorOnGrid(const TTreeErrorOnGrid<Scalar>& e,
+                          const std::string& filename)
+{
+    std::ofstream file(filename);
+    if (!file)
+        throw std::runtime_error("save_TTreeErrorOnGrid: cannot open file");
+    file << std::scientific
+         << std::setprecision(std::numeric_limits<Scalar>::max_digits10);
+    const size_t dim = e.l_point.empty() ? 0 : e.l_point.front().size();
+    file << "l_point " << e.l_point.size() << ' ' << dim << "\n";
+    for (const auto& point : e.l_point) {
+        for (const Scalar& coordinate : point) file << coordinate << ' ';
+        file << "\n";
+    }
+    file << "\nl_ref " << e.l_ref.size() << "\n";
+    for (const auto& value : e.l_ref)
+        file << '(' << value.real() << ',' << value.imag() << ") ";
+    file << "\n\nl_tt " << e.l_tt.size() << "\n";
+    for (const auto& value : e.l_tt)
+        file << '(' << value.real() << ',' << value.imag() << ") ";
+    file << "\n";
+    if (!file)
+        throw std::runtime_error("save_TTreeErrorOnGrid: failed to write file");
+}
+
+template <typename Scalar>
+std::ostream& operator<<(std::ostream& os, const TTreeErrorOnGrid<Scalar>& e)
+{
+    auto print_stats = [&](const char* name, Scalar mean, Scalar min, Scalar max)
+    {
+        os << name << ":\n"
+           << "  mean = " << mean << "\n"
+           << "  min  = " << min << "\n"
+           << "  max  = " << max << "\n";
+    };
+    os << "============== TREE ERROR REPORT ================\n";
+    print_stats("Real abs error", e.real_abs_mean, e.real_abs_min, e.real_abs_max);
+    print_stats("Real rel error", e.real_rel_mean, e.real_rel_min, e.real_rel_max);
+    print_stats("Imag abs error", e.imag_abs_mean, e.imag_abs_min, e.imag_abs_max);
+    print_stats("Imag rel error", e.imag_rel_mean, e.imag_rel_min, e.imag_rel_max);
+    print_stats("Abs error", e.abs_abs_mean, e.abs_abs_min, e.abs_abs_max);
+    print_stats("Abs rel error", e.abs_rel_mean, e.abs_rel_min, e.abs_rel_max);
+    os << "=================================================\n";
+    return os;
+}
+
+/// Test nb_point/2 Halton points and the remaining uniformly random grid points.
+/// Both sets cover the full hypercube. The first points are Halton (index 1 onward),
+/// followed by random points with seed 42; odd counts give the extra point to random.
+/// Coordinates recorded in the report are the actual quantized grid coordinates.
+template <typename Scalar, typename Sint>
+TTreeErrorOnGrid<typename Eigen::NumTraits<Scalar>::Real> error_TTree_on_grid_point(
+    const xfac_quad::TensorTree<Scalar>& tt,
+    std::function<Scalar(std::vector<int>)> gf_id,
+    const MultQTGrid<typename Eigen::NumTraits<Scalar>::Real, Sint>& grid,
+    int nb_point)
+{
+    using Real = typename Eigen::NumTraits<Scalar>::Real;
+    using Complex = std::complex<Real>;
+    if (nb_point <= 0)
+        throw std::invalid_argument("error_TTree_on_grid_point: nb_point must be positive");
+
+    TTreeErrorOnGrid<Real> out;
+    out.real_abs.resize(nb_point);
+    out.real_rel.resize(nb_point);
+    out.imag_abs.resize(nb_point);
+    out.imag_rel.resize(nb_point);
+    out.abs_abs.resize(nb_point);
+    out.abs_rel.resize(nb_point);
+    out.l_point.reserve(nb_point);
+    out.l_ref.resize(nb_point);
+    out.l_tt.resize(nb_point);
+
+    // Generate one distinct prime base per dimension, without a fixed dimension limit.
+    std::vector<int> bases;
+    bases.reserve(grid.get_dim());
+    for (int candidate = 2; bases.size() < static_cast<size_t>(grid.get_dim()); candidate++) {
+        bool prime = true;
+        for (int divisor : bases) {
+            if (divisor > candidate / divisor) break;
+            if (candidate % divisor == 0) {
+                prime = false;
+                break;
+            }
+        }
+        if (prime) bases.push_back(candidate);
+    }
+    auto radical_inverse = [](int index, int base) {
+        Real value = Real(0);
+        Real factor = Real(1);
+        while (index > 0) {
+            factor /= Real(base);
+            value += factor * Real(index % base);
+            index /= base;
+        }
+        return value;
+    };
+
+    const int nb_halton = nb_point / 2;
+    std::mt19937_64 rng(42);
+    std::uniform_int_distribution<int> bit(0, 1);
+    for (int i = 0; i < nb_point; i++) {
+        std::vector<int> id;
+        if (i < nb_halton) {
+            std::vector<Real> point(grid.get_dim());
+            for (int axis = 0; axis < grid.get_dim(); axis++) {
+                const Real u = radical_inverse(i + 1, bases[axis]);
+                point[axis] = grid.get_a()[axis]
+                    + u * (grid.get_b()[axis] - grid.get_a()[axis]);
+            }
+            id = grid.coord_to_id(point);
+        } else {
+            // Independent uniform bits sample the whole grid, including Sint > 64 bits.
+            id.resize(grid.get_tensorLen());
+            for (int& value : id) value = bit(rng);
+        }
+        out.l_point.push_back(grid.id_to_coord(id));
+        const Complex reference(gf_id(id));
+        const Complex approximation(tt.eval(id));
+        const Complex diff = reference - approximation;
+        using std::abs;
+        const Real ref_norm = abs(reference);
+        out.l_ref[i] = reference;
+        out.l_tt[i] = approximation;
+        out.real_abs[i] = diff.real();
+        out.imag_abs[i] = diff.imag();
+        out.abs_abs[i] = abs(diff);
+        if (ref_norm != Real(0)) {
+            out.real_rel[i] = diff.real() / ref_norm;
+            out.imag_rel[i] = diff.imag() / ref_norm;
+            out.abs_rel[i] = out.abs_abs[i] / ref_norm;
+        } else {
+            out.real_rel[i] = Real(0);
+            out.imag_rel[i] = Real(0);
+            out.abs_rel[i] = Real(0);
+        }
+    }
     out.compute_summary();
     return out;
 }

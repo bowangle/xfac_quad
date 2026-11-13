@@ -1,4 +1,16 @@
+
 {
     "C_Cpp.default.compilerPath": "/usr/bin/gcc-13",
-    "git.detectSubmodules": false
+    "git.detectSubmodules": false,
+
+    "code-runner.executorMap": {
+        "cpp": "g++ $fullFileName -o $fileNameWithoutExt && ./$fileNameWithoutExt"
+    },
+
+    "code-runner.executorMapByGlob": {
+        "*": "cd \"$dir\" && \"./$fileName\""
+    },
+
+    "code-runner.runInTerminal": true,
+    "code-runner.ignoreSelection": true
 }
