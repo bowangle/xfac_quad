@@ -302,4 +302,131 @@ private:
 // TCI2_1D_runner_param<double> p{20, 100, 50, {.fullPiv = true, .cache = CacheLevel::runner}};
 // TCI2_1D_runner_param<double> p(20, 100, 50, {.fullPiv = true, .cache = CacheLevel::runner});
 
+template<class T>
+struct ttci_runner_opts {
+    using Real = typename Eigen::NumTraits<T>::Real;
+
+    Real reltol = Eigen::NumTraits<Real>::epsilon() * Real(100);
+    std::vector<int> pivot1 = {};
+    bool fullPiv = false;
+    int nRookIter = 3;
+    CacheLevel cache = CacheLevel::xfac;
+};
+
+template<class T>
+class ttci_runner_param {
+public:
+    using Real = typename Eigen::NumTraits<T>::Real;
+
+    int nb_iter;
+    int bondDim;
+
+    Real reltol;
+    std::vector<int> pivot1;
+    bool fullPiv;
+    int nRookIter;
+    CacheLevel cache;
+
+    bool useCachedFunction_xfac_lvl;
+    bool do_cache_runner_lvl;
+
+    ttci_runner_param(int nb_iter_, int bondDim_, ttci_runner_opts<T> opts = {})
+        : nb_iter(nb_iter_),
+          bondDim(bondDim_),
+          reltol(opts.reltol),
+          pivot1(std::move(opts.pivot1)),
+          fullPiv(opts.fullPiv),
+          nRookIter(opts.nRookIter),
+          cache(opts.cache),
+          useCachedFunction_xfac_lvl(cache == CacheLevel::xfac),
+          do_cache_runner_lvl(cache == CacheLevel::runner)
+    {}
+
+    /// Load saved settings; the grid and first pivot are supplied separately.
+    explicit ttci_runner_param(const std::string& path,
+                               std::vector<int> pivot1_ = {})
+        : ttci_runner_param(load_json(path), std::move(pivot1_))
+    {}
+
+    /// Save algorithm settings only, without the grid or run-specific first pivot.
+    void save(const std::string& path) const {
+        nlohmann::json j = {
+            {"nb_iter", nb_iter},
+            {"bondDim", bondDim},
+            {"reltol", xf_qd_detail::real_to_string(reltol)},
+            {"fullPiv", fullPiv},
+            {"nRookIter", nRookIter},
+            {"cache", xf_qd_detail::cache_name(cache)}
+        };
+
+        if constexpr (std::is_same_v<Real, dd_128>) {
+            j["dd128_exact"] = {
+                {"reltol", xf_qd_detail::encode_dd128_exact(reltol)}
+            };
+        }
+
+        std::ofstream file(path);
+        if (!file.is_open())
+            throw std::runtime_error(
+                "ttci_runner_param: cannot open '" + path + "' for writing");
+        file << j.dump(4);
+        if (!file)
+            throw std::runtime_error(
+                "ttci_runner_param: failed to write '" + path + "'");
+    }
+
+private:
+    struct LoadedParam {
+        int nb_iter;
+        int bondDim;
+        Real reltol;
+        bool fullPiv;
+        int nRookIter;
+        CacheLevel cache;
+    };
+
+    explicit ttci_runner_param(LoadedParam loaded, std::vector<int> pivot1_)
+        : nb_iter(loaded.nb_iter),
+          bondDim(loaded.bondDim),
+          reltol(std::move(loaded.reltol)),
+          pivot1(std::move(pivot1_)),
+          fullPiv(loaded.fullPiv),
+          nRookIter(loaded.nRookIter),
+          cache(loaded.cache),
+          useCachedFunction_xfac_lvl(cache == CacheLevel::xfac),
+          do_cache_runner_lvl(cache == CacheLevel::runner)
+    {}
+
+    static LoadedParam load_json(const std::string& path) {
+        std::ifstream file(path);
+        if (!file.is_open())
+            throw std::runtime_error(
+                "ttci_runner_param: cannot open '" + path + "' for reading");
+
+        nlohmann::json j;
+        file >> j;
+
+        Real loaded_reltol;
+        if constexpr (std::is_same_v<Real, dd_128>) {
+            if (j.contains("dd128_exact")) {
+                loaded_reltol = xf_qd_detail::decode_dd128_exact(
+                    j.at("dd128_exact").at("reltol"));
+            } else {
+                loaded_reltol = xf_qd_detail::real_from_json<Real>(j.at("reltol"));
+            }
+        } else {
+            loaded_reltol = xf_qd_detail::real_from_json<Real>(j.at("reltol"));
+        }
+
+        return {
+            j.at("nb_iter").get<int>(),
+            j.at("bondDim").get<int>(),
+            std::move(loaded_reltol),
+            j.at("fullPiv").get<bool>(),
+            j.at("nRookIter").get<int>(),
+            xf_qd_detail::cache_from_name(j.at("cache").get<std::string>())
+        };
+    }
+};
+
 } // namespace xfac_quad_runner

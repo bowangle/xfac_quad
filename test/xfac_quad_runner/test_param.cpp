@@ -1,4 +1,4 @@
-// Exact save/load roundtrip tests for TCI2_1D_runner_param.
+// Exact save/load roundtrip tests for TCI2_1D_runner_param and ttci_runner_param.
 
 #include "test_common.hpp"
 
@@ -70,6 +70,54 @@ void test_roundtrip(const std::string& type_label)
           ctx, "runner cache flag roundtrips exactly");
 }
 
+template<typename Scalar>
+void test_ttci_roundtrip(const std::string& type_label)
+{
+    using Real = typename Eigen::NumTraits<Scalar>::Real;
+
+    const Real reltol = Eigen::NumTraits<Real>::epsilon() * Real(100);
+    const std::string ctx = "ttci_runner_param<" + type_label + ">";
+    const std::string path =
+        "test/xfac_quad_runner/output_param/ttci_param_" + type_label + ".json";
+
+    ttci_runner_opts<Scalar> opts{
+        .reltol = reltol,
+        .pivot1 = {1, 0, 1, 1, 0, 0, 1},
+        .fullPiv = true,
+        .nRookIter = 17,
+        .cache = CacheLevel::runner
+    };
+    const ttci_runner_param<Scalar> saved(123, 45, opts);
+
+    saved.save(path);
+
+    std::ifstream input(path);
+    nlohmann::json saved_json;
+    input >> saved_json;
+    check(!saved_json.contains("pivot1"), ctx, "pivot1 is not saved");
+
+    const ttci_runner_param<Scalar> loaded(path, saved.pivot1);
+    const ttci_runner_param<Scalar> loaded_without_pivot(path);
+
+    check(saved.nb_iter == loaded.nb_iter, ctx, "nb_iter roundtrips exactly");
+    check(saved.bondDim == loaded.bondDim, ctx, "bondDim roundtrips exactly");
+    check(exactly_equal(saved.reltol, loaded.reltol), ctx,
+          "reltol roundtrips exactly");
+    check(saved.pivot1 == loaded.pivot1, ctx,
+          "pivot1 can be supplied when loading");
+    check(loaded_without_pivot.pivot1.empty(), ctx,
+          "pivot1 defaults to empty when loading");
+    check(saved.fullPiv == loaded.fullPiv, ctx, "fullPiv roundtrips exactly");
+    check(saved.nRookIter == loaded.nRookIter, ctx,
+          "nRookIter roundtrips exactly");
+    check(saved.cache == loaded.cache, ctx, "cache roundtrips exactly");
+    check(saved.useCachedFunction_xfac_lvl ==
+              loaded.useCachedFunction_xfac_lvl,
+          ctx, "xfac cache flag roundtrips exactly");
+    check(saved.do_cache_runner_lvl == loaded.do_cache_runner_lvl,
+          ctx, "runner cache flag roundtrips exactly");
+}
+
 int main()
 {
     std::filesystem::create_directories("test/xfac_quad_runner/output_param");
@@ -78,5 +126,9 @@ int main()
     test_roundtrip<dd_128>("dd_128");
     test_roundtrip<float128>("float128");
 
-    return testing::finish("TCI2_1D_runner_param save/load roundtrip");
+    test_ttci_roundtrip<double>("double");
+    test_ttci_roundtrip<dd_128>("dd_128");
+    test_ttci_roundtrip<float128>("float128");
+
+    return testing::finish("Runner parameter save/load roundtrip");
 }
