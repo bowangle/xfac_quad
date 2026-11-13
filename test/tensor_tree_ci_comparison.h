@@ -238,7 +238,7 @@ void run(Function kind, const char* precision) {
     if (count == 0 || count > std::numeric_limits<std::size_t>::max())
         throw std::invalid_argument("XFAC_QUAD_TTCI_POINTS must fit a positive size_t");
     const auto nb_point_to_test = static_cast<std::size_t>(count);
-    const Real reltol = Real(10000) * std::numeric_limits<Real>::epsilon();
+    const Real reltol = Real(100) * std::numeric_limits<Real>::epsilon();
     const Real tolerance = Real(100000) * std::numeric_limits<Real>::epsilon();
     CAPTURE(precision, a, b, dim, bits, full_piv, nb_point_to_test, reltol, tolerance);
 
