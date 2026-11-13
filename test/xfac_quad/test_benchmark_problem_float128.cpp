@@ -18,7 +18,7 @@ TEST_CASE("Test benchmark problems - float128", "[.][slow]")
     {
         int nBit = 30;
         int dim = 3;
-        MultQTGrid<T, int64_t> mgrid({-40, -40, -40}, {40, 40, 40}, {nBit, nBit, nBit});
+        qtgrid::MultQTGrid<T, int64_t> mgrid({-40, -40, -40}, {40, 40, 40}, {nBit, nBit, nBit});
         auto tensorDims = std::vector<int>(dim * nBit, 2);
 
         auto func = [](T x, T y, T z) { return exp(-sqrt(x*x + y*y + z*z)); };

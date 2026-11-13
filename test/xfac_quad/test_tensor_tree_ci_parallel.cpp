@@ -121,7 +121,7 @@ void benchmark(const char* precision) {
     INFO("available OpenMP processors=" << available);
     REQUIRE(available >= 1);
 
-    const MultQTGrid<Real, std::int64_t> grid({Real(-9)}, {Real(5)}, {30});
+    const qtgrid::MultQTGrid<Real, std::int64_t> grid({Real(-9)}, {Real(5)}, {30});
     const auto exact_function = [&](std::vector<int> const& bits) -> Real {
         using std::abs;
         using std::exp;

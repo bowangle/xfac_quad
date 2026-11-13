@@ -55,7 +55,7 @@ ConfigResult<Scalar> run_config(const std::string& type_label,
     out.fullPiv = fullPiv;
 
     // ---- grid and 1D chain ----
-    MultQTGrid<Real, Sint> grid({Real(0)}, {Real(1)}, {kNBit});
+    qtgrid::MultQTGrid<Real, Sint> grid({Real(0)}, {Real(1)}, {kNBit});
     const auto tree = xfac_quad::makeTuckerTree(1, kNBit);
 
     // ---- a non-default pivot1, to verify propagation ----

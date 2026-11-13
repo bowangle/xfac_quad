@@ -1,6 +1,6 @@
 #pragma once
 // QTgrid-quad provides the core QTGrid<Scalar,Sint> class
-#include <grid.h>
+#include <QTgrid-quad/grid.h>
 
 #include <cmath>
 #include <vector>
@@ -48,18 +48,18 @@ template<> inline double     pi<double>()     { return M_PI; }
 template<> inline dd_128     pi<dd_128>()     { return dd_real::_pi; }
 
 // ============================================================
-// QTGrid — thin wrapper around QTgrid-quad's ::QTGrid,
+// QTGrid — thin wrapper around qtgrid::QTGrid,
 //          adding MultiIndex-based coord_to_id / id_to_coord
 //          and keeping the same API as the original xfac_quad.
 // ============================================================
 template <typename Scalar, typename Sint>
-class QTGrid : public ::QTGrid<Scalar, Sint> {
+class QTGrid : public qtgrid::QTGrid<Scalar, Sint> {
 public:
-    using ::QTGrid<Scalar, Sint>::QTGrid;
+    using qtgrid::QTGrid<Scalar, Sint>::QTGrid;
 
     // --- MultiIndex versions (convert to/from std::vector<int>) ---
     MultiIndex coord_to_id(Scalar x) const {
-        auto bits = ::QTGrid<Scalar, Sint>::coord_to_id(x);
+        auto bits = qtgrid::QTGrid<Scalar, Sint>::coord_to_id(x);
         MultiIndex mi(bits.size(), char32_t(0));
         for (size_t i = 0; i < bits.size(); ++i)
             mi[i] = char32_t(bits[i]);
@@ -68,12 +68,12 @@ public:
 
     Scalar id_to_coord(const MultiIndex& mi) const {
         std::vector<int> bits(mi.begin(), mi.end());
-        return ::QTGrid<Scalar, Sint>::id_to_coord(bits);
+        return qtgrid::QTGrid<Scalar, Sint>::id_to_coord(bits);
     }
 
     // Needed because the inherited overload with vector<int> is hidden
-    using ::QTGrid<Scalar, Sint>::coord_to_id;
-    using ::QTGrid<Scalar, Sint>::id_to_coord;
+    using qtgrid::QTGrid<Scalar, Sint>::coord_to_id;
+    using qtgrid::QTGrid<Scalar, Sint>::id_to_coord;
 };
 
 } // namespace grid

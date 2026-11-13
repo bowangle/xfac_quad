@@ -6,24 +6,30 @@ if(PROJECT_IS_TOP_LEVEL)
 endif()
 
 option(XFAC_QUAD_BUILD_TESTS
-       "Build xfac_quad and xfac_quad_runner tests"
+       "Build QTgrid-quad, xfac_quad, and xfac_quad_runner tests"
        ${PROJECT_IS_TOP_LEVEL})
 
 # ---- dependencies -------------------------------------------------------------
 find_package(OpenMP REQUIRED)
 find_package(Boost REQUIRED)
 
-# Guard against a sibling project (e.g. tci_quad) having already added its own
-# copy of QTgrid-quad to this build tree: target names are global, so a second
-# add_subdirectory() would be a hard "target already exists" error.
-if(NOT TARGET qtgrid_deps)
-    add_subdirectory(extern/QTgrid-quad)
+# QTGrid headers now live in this project. Only the numerical types remain
+# a separate dependency; reuse its target if a sibling already added it.
+if(NOT TARGET numeric_type_deps)
+    add_subdirectory(extern/numeric-type-quad)
 endif()
 
 # ---- own paths ----------------------------------------------------------------
 set(XFAC_QUAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(CATCH2_INCLUDE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/extern/Catch2/single_include)
 set(SPDLOG_INCLUDE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/extern/spdlog/include)
+set(JSON_INCLUDE_DIR      ${CMAKE_CURRENT_SOURCE_DIR}/extern/json/include)
+
+if(NOT EXISTS ${JSON_INCLUDE_DIR}/nlohmann/json.hpp)
+    message(FATAL_ERROR
+        "nlohmann/json not found at ${JSON_INCLUDE_DIR}.\n"
+        "Run: git submodule update --init --recursive")
+endif()
 
 if(NOT EXISTS ${SPDLOG_INCLUDE_DIR}/spdlog/spdlog.h)
     message(FATAL_ERROR
@@ -37,14 +43,15 @@ add_library(xfac_quad_deps INTERFACE)
 target_include_directories(xfac_quad_deps INTERFACE
     ${XFAC_QUAD_INCLUDE_DIR})
 
-# Header-only spdlog, shared by the core and runner through the same target.
+# Header-only dependencies shared by grids, core, and runner.
 target_include_directories(xfac_quad_deps SYSTEM INTERFACE
-    ${SPDLOG_INCLUDE_DIR})
+    ${SPDLOG_INCLUDE_DIR}
+    ${JSON_INCLUDE_DIR})
 
 target_compile_features(xfac_quad_deps INTERFACE cxx_std_20)
 
 target_link_libraries(xfac_quad_deps INTERFACE
-    qtgrid_deps
+    numeric_type_deps
     OpenMP::OpenMP_CXX)
 
 if(TARGET Boost::headers)
@@ -70,6 +77,16 @@ if(XFAC_QUAD_BUILD_TESTS)
     endif()
 
     enable_testing()
+
+    # Quantics grids: test/QTgrid-quad/test_<name>.cpp.
+    foreach(_name grid multigrid)
+        add_executable(qtgrid_test_${_name} test/QTgrid-quad/test_${_name}.cpp)
+        target_link_libraries(qtgrid_test_${_name} PRIVATE xfac_quad_deps)
+        target_compile_options(qtgrid_test_${_name} PRIVATE
+            -Wall -Wextra -Wreorder -Wshadow -UNDEBUG)
+        add_test(NAME qtgrid_test_${_name}
+                 COMMAND qtgrid_test_${_name})
+    endforeach()
 
     # Numerical core: test/xfac_quad/test_<name>.cpp.
     set(_xfac_quad_tests

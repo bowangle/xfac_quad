@@ -73,7 +73,7 @@ ConfigResult<Scalar> run_config(const std::string& type_label,
     out.fullPiv = fullPiv;
 
     // ---- grid and 2D Tucker topology ----
-    MultQTGrid<Real, Sint> grid({Real(0), Real(0)}, {Real(1), Real(1)},
+    qtgrid::MultQTGrid<Real, Sint> grid({Real(0), Real(0)}, {Real(1), Real(1)},
                                {kNBit, kNBit});
     const auto tree = grouped_tree_2d();
 

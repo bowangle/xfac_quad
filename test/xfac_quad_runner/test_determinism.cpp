@@ -48,7 +48,7 @@ RunSnapshot do_one_fit(CacheLevel cache, bool fullPiv, const std::string& prefix
     using Real = typename Eigen::NumTraits<Scalar>::Real;
     using Sint = util::i128;
 
-    QTGrid<Real, Sint> grid(Real(0), Real(1), kNBit);
+    qtgrid::QTGrid<Real, Sint> grid(Real(0), Real(1), kNBit);
 
     std::vector<int> pivot1_custom(kNBit, 1);
     pivot1_custom[0] = 0;

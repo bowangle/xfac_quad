@@ -17,7 +17,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include <grid.h> // QTgrid_quad.
+#include <QTgrid-quad/grid.h>
 #include <xfac_quad/xfac_quad.hpp>
 #include <xfac_quad/tree/tree.hpp>
 #include <xfac_quad/tree/tensor_tree_ci.hpp>
@@ -36,7 +36,7 @@ class TCI2_1D_Runner{
     using Real = typename Eigen::NumTraits<Scalar>::Real;
     using Complex = std::complex<Real>;
 
-    const QTGrid<Real, Sint> grid;
+    const qtgrid::QTGrid<Real, Sint> grid;
     const TCI2_1D_runner_param<Scalar> tci_param;
     std::function<Scalar(Real)> function_x;               // original function: Scalar(Real)
     std::function<Scalar(std::vector<int>)> function_id;  // function on grid: Scalar(id)
@@ -46,7 +46,7 @@ class TCI2_1D_Runner{
     std::shared_ptr<spdlog::logger> const logger;
 
     TCI2_1D_Runner(
-        QTGrid<Real, Sint> grid_,
+        qtgrid::QTGrid<Real, Sint> grid_,
         TCI2_1D_runner_param<Scalar> tci_param_,
         std::function<Scalar(Real)> function_x_,
         std::shared_ptr<spdlog::logger> logger_ = nullptr
@@ -514,7 +514,7 @@ public:
     using Real = typename Eigen::NumTraits<Scalar>::Real;
     using Complex = std::complex<Real>;
 
-    const MultQTGrid<Real, Sint> mgrid;
+    const qtgrid::MultQTGrid<Real, Sint> mgrid;
     const xfac_quad::TopologyTree tree;
     const ttci_runner_param<Scalar> tci_param;
     std::function<Scalar(std::vector<Real>)> function_x;
@@ -525,7 +525,7 @@ public:
     std::shared_ptr<spdlog::logger> const logger;
 
     TTCI_runner(
-        MultQTGrid<Real, Sint> mgrid_,
+        qtgrid::MultQTGrid<Real, Sint> mgrid_,
         xfac_quad::TopologyTree tree_,
         ttci_runner_param<Scalar> tci_param_,
         std::function<Scalar(std::vector<Real>)> function_x_,

@@ -68,7 +68,7 @@ ConfigResult<Scalar> run_config(const std::string& type_label,
     out.fullPiv = fullPiv;
 
     // ---- grid ----
-    QTGrid<Real, Sint> grid(Real(0), Real(1), kNBit);
+    qtgrid::QTGrid<Real, Sint> grid(Real(0), Real(1), kNBit);
 
     // ---- a non-default pivot1, to verify propagation ----
     std::vector<int> pivot1_custom(kNBit, 1);
@@ -230,7 +230,7 @@ void check_left_limit_metadata(const std::string& type_label)
     using Runner = TCI2_1D_Runner<Scalar, Sint>;
 
     constexpr int n_bit = 6;
-    QTGrid<Real, Sint> grid(Real(0), Real(1), n_bit);
+    qtgrid::QTGrid<Real, Sint> grid(Real(0), Real(1), n_bit);
     const Real jump = Real(1) / Real(2);
     const std::vector<Real> discontinuities{jump};
     const auto make_value = [](Real re, Real im) -> Scalar {

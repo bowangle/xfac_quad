@@ -11,7 +11,7 @@
 #include <random>
 #include <stdexcept>
 
-#include <grid.h>
+#include <QTgrid-quad/grid.h>
 #include <xfac_quad/xfac_quad.hpp>
 #include <xfac_quad/tree/tensor_tree.hpp>
 
@@ -184,7 +184,7 @@ template <typename Scalar, typename Sint>
 TTErrorOnGrid<Scalar> error_TT_on_grid_point(
     const xfac_quad::TensorTrain<std::complex<Scalar>>& tt,
     std::function<std::complex<Scalar>(std::vector<int>)> gf_id,
-    const QTGrid<Scalar, Sint>& grid,
+    const qtgrid::QTGrid<Scalar, Sint>& grid,
     int nb_point)
 {
     using Complex = std::complex<Scalar>;
@@ -333,7 +333,7 @@ template <typename Scalar, typename Sint>
 TTreeErrorOnGrid<typename Eigen::NumTraits<Scalar>::Real> error_TTree_on_grid_point(
     const xfac_quad::TensorTree<Scalar>& tt,
     std::function<Scalar(std::vector<int>)> gf_id,
-    const MultQTGrid<typename Eigen::NumTraits<Scalar>::Real, Sint>& grid,
+    const qtgrid::MultQTGrid<typename Eigen::NumTraits<Scalar>::Real, Sint>& grid,
     int nb_point)
 {
     using Real = typename Eigen::NumTraits<Scalar>::Real;

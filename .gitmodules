@@ -1,7 +1,3 @@
-[submodule "extern/QTgrid-quad"]
-	path = extern/QTgrid-quad
-	url = https://github.com/bowangle/QTgrid-quad.git
-	ignore = dirty
 [submodule "extern/Catch2"]
 	path = extern/Catch2
 	url = https://github.com/catchorg/Catch2.git
@@ -11,3 +7,9 @@
 	path = extern/spdlog
 	url = https://github.com/gabime/spdlog.git
 	ignore = dirty
+[submodule "extern/json"]
+	path = extern/json
+	url = https://github.com/nlohmann/json.git
+[submodule "extern/numeric-type-quad"]
+	path = extern/numeric-type-quad
+	url = https://github.com/bowangle/numeric-type-quad.git

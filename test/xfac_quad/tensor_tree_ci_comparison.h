@@ -242,7 +242,7 @@ void run(Function kind, const char* precision) {
     const Real tolerance = Real(100000) * std::numeric_limits<Real>::epsilon();
     CAPTURE(precision, a, b, dim, bits, full_piv, nb_point_to_test, reltol, tolerance);
 
-    const MultQTGrid<Real, std::int64_t> grid(std::vector<Real>(dim, Real(a)),
+    const qtgrid::MultQTGrid<Real, std::int64_t> grid(std::vector<Real>(dim, Real(a)),
         std::vector<Real>(dim, Real(b)), std::vector<int>(dim, bits));
     // Recreate the same five distinct global pivots for both methods and every precision.
     // Continue the stream for evaluation points, rather than reusing the pivots as its prefix.
