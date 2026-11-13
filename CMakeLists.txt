@@ -6,7 +6,7 @@ if(PROJECT_IS_TOP_LEVEL)
 endif()
 
 option(XFAC_QUAD_BUILD_TESTS
-       "Build xfac_quad's own tests"
+       "Build xfac_quad and xfac_quad_runner tests"
        ${PROJECT_IS_TOP_LEVEL})
 
 # ---- dependencies -------------------------------------------------------------
@@ -23,12 +23,23 @@ endif()
 # ---- own paths ----------------------------------------------------------------
 set(XFAC_QUAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(CATCH2_INCLUDE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/extern/Catch2/single_include)
+set(SPDLOG_INCLUDE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/extern/spdlog/include)
+
+if(NOT EXISTS ${SPDLOG_INCLUDE_DIR}/spdlog/spdlog.h)
+    message(FATAL_ERROR
+        "spdlog not found at ${SPDLOG_INCLUDE_DIR}.\n"
+        "Run: git submodule update --init --recursive")
+endif()
 
 # ---- interface target: production headers + transitive deps -------------------
 add_library(xfac_quad_deps INTERFACE)
 
 target_include_directories(xfac_quad_deps INTERFACE
     ${XFAC_QUAD_INCLUDE_DIR})
+
+# Header-only spdlog, shared by the core and runner through the same target.
+target_include_directories(xfac_quad_deps SYSTEM INTERFACE
+    ${SPDLOG_INCLUDE_DIR})
 
 target_compile_features(xfac_quad_deps INTERFACE cxx_std_20)
 
@@ -60,7 +71,7 @@ if(XFAC_QUAD_BUILD_TESTS)
 
     enable_testing()
 
-    # One entry per test/test_<name>.cpp -> target xfac_quad_test_<name>
+    # Numerical core: test/xfac_quad/test_<name>.cpp.
     set(_xfac_quad_tests
         main
         tree
@@ -88,12 +99,24 @@ if(XFAC_QUAD_BUILD_TESTS)
         tensor_ci_dd128)
 
     foreach(_name IN LISTS _xfac_quad_tests)
-        add_executable(xfac_quad_test_${_name} test/test_${_name}.cpp)
+        add_executable(xfac_quad_test_${_name} test/xfac_quad/test_${_name}.cpp)
         target_link_libraries(xfac_quad_test_${_name}
             PRIVATE xfac_quad_deps xfac_quad_testing)
         target_compile_options(xfac_quad_test_${_name} PRIVATE
             -Wall -Wextra -Wreorder -Wshadow)
         add_test(NAME xfac_quad_test_${_name}
                  COMMAND xfac_quad_test_${_name})
+    endforeach()
+
+    # High-level runner: test/xfac_quad_runner/test_<name>.cpp.
+    set(_xfac_quad_runner_tests runner determinism param)
+    foreach(_name IN LISTS _xfac_quad_runner_tests)
+        add_executable(xfac_quad_runner_test_${_name}
+            test/xfac_quad_runner/test_${_name}.cpp)
+        target_link_libraries(xfac_quad_runner_test_${_name} PRIVATE xfac_quad_deps)
+        target_compile_options(xfac_quad_runner_test_${_name} PRIVATE
+            -Wall -Wextra -Wreorder -Wshadow -UNDEBUG)
+        add_test(NAME xfac_quad_runner_test_${_name}
+                 COMMAND xfac_quad_runner_test_${_name})
     endforeach()
 endif()

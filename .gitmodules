@@ -7,3 +7,7 @@
 	url = https://github.com/catchorg/Catch2.git
 	branch = v2.x
 	ignore = dirty
+[submodule "extern/spdlog"]
+	path = extern/spdlog
+	url = https://github.com/gabime/spdlog.git
+	ignore = dirty

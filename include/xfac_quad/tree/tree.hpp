@@ -82,12 +82,12 @@ public:
         }
         // remove the *from* and *to* node from the trees.
         // if dangling elements and reordering might happen, replace the former nodes *from* and *two* by a special value *dummy_node*
-        if (t0.neigh.at(from).pos(to) != t0.neigh.at(from).size() - 1){
+        if (t0.neigh.at(from).pos(to) != std::ssize(t0.neigh.at(from)) - 1){
             t0.neigh.at(from).replace(to, dummy_node);
         } else {
             t0.neigh.at(from).remove(to);
         }
-        if (t1.neigh.at(to).pos(from) != t1.neigh.at(to).size() - 1){
+        if (t1.neigh.at(to).pos(from) != std::ssize(t1.neigh.at(to)) - 1){
             t1.neigh.at(to).replace(from, dummy_node);
         } else {
             t1.neigh.at(to).remove(from);
@@ -116,7 +116,7 @@ public:
         std::vector<int> path;
         walk_depth_first(path,root_id);
         std::vector<std::pair<int,int>> out;
-        for (int i=0u; i+1<path.size(); i++)
+        for (std::size_t i = 0; i + 1 < path.size(); i++)
             out.push_back({path[i],path[i+1]});
         return out;
     }
