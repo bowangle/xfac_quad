@@ -67,6 +67,10 @@ if(XFAC_QUAD_BUILD_TESTS)
         tensor_tree
         tensor_tree_ci
         tensor_tree_ci_process
+        tensor_tree_ci_parallel
+        tensor_tree_ci_compare_double
+        tensor_tree_ci_compare_float128
+        tensor_tree_ci_compare_dd128
         tensor_tree_io
         tensor_tree_sum
         cubemat_io

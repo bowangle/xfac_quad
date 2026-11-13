@@ -1,1 +1,5 @@
 build/
+tensor_tree_ci_compare_double.csv
+tensor_tree_ci_compare_dd128.csv
+tensor_tree_ci_compare_float128.csv
+tensor_tree_ci_parallel.csv
